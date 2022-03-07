@@ -76,7 +76,7 @@ move_step_t mv_auto_2[] =
   {0.0, 0.0, 0.2, -0.3, 1},
   // reverse
   {0.2, 0.0, 2.2, 0.0, 1},
-  {0, 0.0, 0.5, 0.7, 1},
+  {0, 0.0, 1.0, 0.7, 1},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0},
 };
@@ -96,6 +96,15 @@ move_step_t mv_shoot[] =
   // {0.0, 0.0, 1.0, 0.0, 1},
   // // shoot 2
   // {0.0, 0.0, 1.0, 0.7, 1},
+  // stop
+  {0.0, 0.0, 0.5, 0.0, 0},
+};
+
+// spin up, back off
+move_step_t mv_backoff[] =
+{
+  {-0.2, 0.0, 0.25, 0.0, 1},
+  // {0.0, 0.0, 0.2, -0.3, 1},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0},
 };
@@ -230,7 +239,7 @@ class Robot : public frc::TimedRobot {
 
  public:
   void RobotInit() {
-    printf("Rapid React v3.1 %s %s\n", __DATE__, __TIME__);
+    printf("Rapid React v3.4-np %s %s\n", __DATE__, __TIME__);
 
     frc::SmartDashboard::PutNumber("fw_sp",0);
     /**
@@ -257,15 +266,15 @@ class Robot : public frc::TimedRobot {
     m_rightLeadMotor.SetInverted(true);
 
     camera1 = frc::CameraServer::StartAutomaticCapture();
-    camera2 = frc::CameraServer::StartAutomaticCapture();
+    // camera2 = frc::CameraServer::StartAutomaticCapture();
 
     camera1.SetConnectionStrategy(cs::VideoSource::ConnectionStrategy::kConnectionKeepOpen);
     camera1.SetResolution(320, 240);
     camera1.SetFPS(15);
 
-    camera2.SetConnectionStrategy(cs::VideoSource::ConnectionStrategy::kConnectionKeepOpen);
-    camera2.SetResolution(320, 240);
-    camera2.SetFPS(15);
+    // camera2.SetConnectionStrategy(cs::VideoSource::ConnectionStrategy::kConnectionKeepOpen);
+    // camera2.SetResolution(320, 240);
+    // camera2.SetFPS(15);
 
     cameraSelection = nt::NetworkTableInstance::GetDefault().GetTable("")->GetEntry("CameraSelection");
 
@@ -273,8 +282,8 @@ class Robot : public frc::TimedRobot {
     // server.SetSource(camera2);
 
     frc::SmartDashboard::PutNumber("delay", 2);
-    frc::SmartDashboard::PutNumber("auto", 1);
-    frc::SmartDashboard::PutNumber("fw_sp", 0.625);
+    frc::SmartDashboard::PutNumber("auto", 2);
+    frc::SmartDashboard::PutNumber("fw_sp", 0.51);
 
     frc::SmartDashboard::PutNumber("P", 0.001);
   }
@@ -387,8 +396,7 @@ class Robot : public frc::TimedRobot {
 
     // printf("y=%5.2f z=%5.2f\n", y, z);
     
-    int lift_position = m_lift_position.GetValue();   
-
+    // int lift_position = m_lift_position.GetValue();   
     // printf("pos=%d\n", lift_position);
     
     // double lift_speed = 0;
@@ -398,6 +406,10 @@ class Robot : public frc::TimedRobot {
     if (m_stick_o.GetRawButtonPressed(7))
     {
       start_move(mv_shoot, SIZEOF_ARRAY(mv_shoot));
+    }
+    else if (m_stick_d.GetRawButtonPressed(1))
+    {
+      start_move(mv_backoff, SIZEOF_ARRAY(mv_backoff));
     }
     
     // auto movement
@@ -451,14 +463,16 @@ class Robot : public frc::TimedRobot {
       // extend
       m_lift_sp = 1600;
 
-      if (lift_position < m_lift_sp) lift_speed = 0.4; 
+      // if (lift_position < m_lift_sp) 
+      lift_speed = 0.4; 
     }
     else if (m_stick_o.GetRawButton(1))
     {
       // retract
       m_lift_sp = 480;
 
-      if (lift_position > m_lift_sp) lift_speed = -0.4;
+      // if (lift_position > m_lift_sp) 
+      lift_speed = -0.4;
     }
 
     // lift_speed = m_lift_pid.Calculate(lift_position, m_lift_sp);
