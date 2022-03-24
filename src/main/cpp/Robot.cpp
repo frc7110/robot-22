@@ -6,7 +6,7 @@
 
 #define SIZEOF_ARRAY(array_name) (sizeof(array_name) / sizeof(array_name[0]))
 
-static const char *version = "Rapid React v5.2x";
+static const char *version = "Rapid React v5.3x";
 
 static const int key_alt = 6;     // RB
 static const int key_retract = 1; // A
@@ -125,24 +125,6 @@ move_step_t mv_back_shot[] =
   {0.0, 0.0, 0.7, 0.0, 1, 0.0, 0.0, 0},
   // shoot 2
   {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
-};
-
-// drive
-move_step_t mv_distance[] =
-{
-  // drive distance
-  {-0.2, 0.0, 5.0, 0.0, 0, 60.0, 0.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
-};
-
-// turn
-move_step_t mv_heading[] =
-{
-  // drive distance
-  {0.0, 0.0, 5.0, 0.0, 0, 0.0, -45.0, 0},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
@@ -321,9 +303,9 @@ void Robot::TeleopInit()
       m_fw_sp2 /= 10;
     }
 
-    m_alliance = frc::DriverStation::GetAlliance();
-
     printf("fw_speed=%5.2f/%5.2f\n", m_fw_sp1, m_fw_sp2);
+
+    m_alliance = frc::DriverStation::GetAlliance();
 
     double P = frc::SmartDashboard::GetNumber("P", 0);
     m_lift_pid.SetP(P);
@@ -361,7 +343,7 @@ void Robot::TeleopPeriodic()
     }
     else
     {
-      scale(y, 0.05, 0.0, .325);
+      scale(y, 0.05, 0.0, .32);
       scale(z, 0.05, 0.0, .25);
     }
   
@@ -454,15 +436,6 @@ void Robot::TeleopPeriodic()
       start_move(mv_back_shot, SIZEOF_ARRAY(mv_back_shot));
     }
 #if 0
-    if (m_stick_o.GetRawButtonPressed(4))
-    {
-      start_move(mv_distance, SIZEOF_ARRAY(mv_distance));
-    }
-    else if (m_stick_o.GetRawButtonPressed(2))
-    {
-      start_move(mv_heading, SIZEOF_ARRAY(mv_heading));
-    }
-
     // abort move?
     if (m_stick_o.GetRawButtonPressed(1))
     {
@@ -477,6 +450,10 @@ void Robot::TeleopPeriodic()
         // get z from the pixy
         steer_pixy(output.z, m_alliance);
     }
+
+#if 1
+    if (output.flywheel != 0) printf("fw v=%5.2f\n", m_fw_encoder.GetVelocity());
+#endif
 
     // all motors should be updated every pass
     update_outputs(output);
@@ -538,7 +515,6 @@ void Robot::evaluate_step(output_t &output)
   double t = m_timer.Get().value();
   double elapsed = t - m_step_start;
 
-  // printf("elapsed=%5.2f\n", elapsed);
   if (elapsed >= m_step.t)
   {
     // step timed out
@@ -557,54 +533,6 @@ void Robot::evaluate_step(output_t &output)
   double y = m_step.y;
   double z = m_step.z;
 
-#if 0
-  // TBD else if?
-  if (m_step.distance == 0 && m_step.heading == 0)
-  {
-    // no goals, time based only
-    output.y = y;
-    output.z = z;
-    output.intake = m_step.intake;
-    if (m_step.flywheel) output.flywheel = (m_step.flywheel) ? m_fw_sp1 : m_fw_sp2;
-  }
-  else
-  {
-    // may have one or more goals
-    bool distance_complete = (m_step.distance == 0);
-    if (!distance_complete)
-    {
-      y = drive_distance(m_step.distance);
-      z = drive_heading(0);
-      distance_complete = (fabs(y) < 0.001 && fabs(z) < 0.001);
-    }
-
-    bool heading_complete = (m_step.heading != 0);
-    if (!heading_complete)    // TODO: This doesn't work for absolute heading?!
-    {
-      z = drive_heading(m_step.heading);
-      heading_complete = (fabs(z) < 0.001 );
-    }
-
-    if (distance_complete && heading_complete)
-    {
-      // goal complete, advance regardless of time
-      next_step(t);
-    }
-    else
-    {
-      output.y = y;
-      output.z = z;
-      output.intake = m_step.intake;
-      if (m_step.flywheel) output.flywheel = (m_step.flywheel == 1) ? m_fw_sp1 : m_fw_sp2;
-
-      if (m_step.pixy)
-      {
-        // get z from the pixy
-        steer_pixy(output.z, m_alliance);
-      }
-    }
-  }
-#else
   if (m_step.distance != 0 || m_step.heading != 0)
   {
     // there are one or more goals
@@ -640,7 +568,6 @@ void Robot::evaluate_step(output_t &output)
     // get z from the pixy
     steer_pixy(output.z, m_alliance);
   }
-#endif
 }
 
 void Robot::next_step(double t)
@@ -782,7 +709,7 @@ void Robot::update_outputs(output_t output)
 
     m_intake_1.Set(output.intake);
     m_intake_2.Set(output.intake);
-    m_flywheel.Set(-output.flywheel);
+    m_fw_motor.Set(-output.flywheel);
     m_lift.Set(output.lift);
 }
 
@@ -817,34 +744,6 @@ void Robot::drive(double y, double z, bool limit_accel)
   
 int Robot::get_Pixy_xy(int& x, int& a, int& colorSignature)
 {
-#if 0
-  struct header_s
-  {
-    uint16_t sync;
-    uint8_t type;
-    uint8_t length;
-    uint16_t checksum;
-  };
-
-  struct block_s
-  {
-    uint16_t m_signature;
-    uint16_t m_x;
-    uint16_t m_y;
-    uint16_t m_width;
-    uint16_t m_height;
-    int16_t m_angle;
-    uint8_t m_index;
-    uint8_t m_age;
-  };
-
-  struct buffer_s
-  {
-    struct header_s header;
-    struct block_s payload;
-  } buffer;
-#endif
-
     //Pixy Camera:
     //sendPacket byte 0-1 16-bit sync, 2 type, 3 length of payload (len), 4-len payload
     //recvPacket byte 0-1 16-bit sync(174, 193), 2 type, 3 length of payload (len), 4-5 16-bit checksum, 6-len payload
@@ -868,9 +767,6 @@ int Robot::get_Pixy_xy(int& x, int& a, int& colorSignature)
     x = xDirectionValue - 160;
 
     printf("pixy: index=%d x=%d color=%d\n", receiveBufffer[18], xDirectionValue, colorSignature);
-
-    // frc::SmartDashboard::PutString("DB/String 5", "Index: "+ std::to_string(receiveBufffer[18]));
-    // frc::SmartDashboard::PutString("DB/String 6", "Age: "+ std::to_string(a));
 
     return true;
 }

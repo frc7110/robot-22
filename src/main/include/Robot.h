@@ -102,10 +102,12 @@ class Robot : public frc::TimedRobot
     rev::CANSparkMax m_lf_motor{leftFollowDeviceID, rev::CANSparkMax::MotorType::kBrushless};
     rev::CANSparkMax m_rf_motor{rightFollowDeviceID, rev::CANSparkMax::MotorType::kBrushless};
 
-    rev::CANSparkMax m_flywheel{5, rev::CANSparkMax::MotorType::kBrushless};
+    rev::CANSparkMax m_fw_motor{5, rev::CANSparkMax::MotorType::kBrushless};
 
     rev::SparkMaxRelativeEncoder m_ll_encoder = m_ll_motor.GetEncoder();
     rev::SparkMaxRelativeEncoder m_rl_encoder = m_rl_motor.GetEncoder();
+
+    rev::SparkMaxRelativeEncoder m_fw_encoder = m_fw_motor.GetEncoder();
 
     frc::DifferentialDrive m_robotDrive{m_ll_motor, m_rl_motor};
 
