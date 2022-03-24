@@ -42,13 +42,40 @@ move_step_t mv_auto_2[] =
   {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
   // back up with intake running
   // {0.4, 0.0, 2.5, 0.0, 1, 0.0, 0.0, 0},
-  {-0.2, 0.0, 2.2, 0.7, 0, 0.0, 0.0, 0},
+  {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 0},
   // "chamber" the cargo
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   // reverse
-  {0.2, 0.0, 2.2, 0.0, 1, 0.0, 0.0, 0},
+  {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
   // fire
-  {0, 0.0, 0.5, 0.7, 1, 0.0, 0.0, 0},
+  {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
+  // stop
+  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
+};
+
+// shoot, back up for cargo and return
+move_step_t mv_auto_3[] =
+{
+  // delay
+  {0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0},
+  // spin up
+  {0.0, 0.0, 1.0, 0.0, 1, 0.0, 0.0, 0},
+  // fire
+  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
+  // back up with intake running
+  // {0.4, 0.0, 2.5, 0.0, 1, 0.0, 0.0, 0},
+  {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 0},
+  // "chamber" the cargo
+  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  // reverse
+  {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
+  // fire
+  {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
+  // back up with intake running
+  // {0.4, 0.0, 2.5, 0.0, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 5.5, 0.7, 0, 0.0, 45.0, 0},
+  {-0.22, 0.0, 5.5, 0.7, 0, 0.0, 0.0, 1},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
@@ -77,6 +104,27 @@ move_step_t mv_back[] =
 {
   // back up
   {0.0, 0.0, 0.7, 0.0, 0, 12, 0.0, 0},
+  // stop
+  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
+};
+
+// back up
+move_step_t mv_back_shot[] =
+{
+  // back up
+  {0.0, 0.0, 0.7, 0.0, 0, 12, 0.0, 0},
+  // all cargo to the top
+  {0.0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0},
+  // back cargo away from flywheel
+  {0.0, 0.0, 0.6, -0.3, 0, 0.0, 0.0, 0},
+  // spin up
+  {0.0, 0.0, 1.2, 0.0, 1, 0.0, 0.0, 0},
+  // shoot 1
+  {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
+  // recover
+  {0.0, 0.0, 0.7, 0.0, 1, 0.0, 0.0, 0},
+  // shoot 2
+  {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
@@ -203,8 +251,8 @@ void Robot::RobotInit()
 
     frc::SmartDashboard::PutNumber("delay", 0);
     frc::SmartDashboard::PutNumber("auto", 2);
-    frc::SmartDashboard::PutNumber("fw_sp1", 0.36);
-    frc::SmartDashboard::PutNumber("fw_sp2", 0.23);
+    frc::SmartDashboard::PutNumber("fw_sp1", 0.55);
+    frc::SmartDashboard::PutNumber("fw_sp2", 0.35);
 
     frc::SmartDashboard::PutNumber("P", 0.002);
 
@@ -243,6 +291,11 @@ void Robot::AutonomousInit()
       mv_auto_2[0].t = delay;
       start_move(mv_auto_2, SIZEOF_ARRAY(mv_auto_2));
     }
+    else if (auto_selection == 3)
+    {
+      mv_auto_2[0].t = delay;
+      start_move(mv_auto_3, SIZEOF_ARRAY(mv_auto_3));
+    }
 }
 
 void Robot::AutonomousPeriodic() 
@@ -265,6 +318,8 @@ void Robot::TeleopInit()
     while (m_fw_sp2 < -1.0 || m_fw_sp2 > 1.0) {
       m_fw_sp2 /= 10;
     }
+
+    m_alliance = frc::DriverStation::GetAlliance();
 
     printf("fw_speed=%5.2f/%5.2f\n", m_fw_sp1, m_fw_sp2);
 
@@ -304,8 +359,8 @@ void Robot::TeleopPeriodic()
     }
     else
     {
-      scale(y, 0.05, 0.0, .3);
-      scale(z, 0.05, 0.0, .15);
+      scale(y, 0.05, 0.0, .325);
+      scale(z, 0.05, 0.0, .25);
     }
   
     output.y = y;
@@ -317,8 +372,8 @@ void Robot::TeleopPeriodic()
     printf("p=%5.2f/%5.2f\n", ll_pos, rl_pos);
 #endif
 #if 0
-    double ll_velocity = m_encoder_ll.GetVelocity();
-    double rl_velocity = m_encoder_rl.GetVelocity();
+    double ll_velocity = m_ll_encoder.GetVelocity();
+    double rl_velocity = m_rl_encoder.GetVelocity();
     printf("v=%5.2f/%5.2f\n", ll_velocity, rl_velocity);
 #endif
 
@@ -356,7 +411,7 @@ void Robot::TeleopPeriodic()
     {
       if (m_stick_o.GetRawButtonPressed(key_extend))
       {
-        m_lift_sp = 1300;
+        m_lift_sp = 1340;
       }
       else if (m_stick_o.GetRawButtonPressed(key_retract))
       {
@@ -384,6 +439,7 @@ void Robot::TeleopPeriodic()
       }
     }
     clamp(lift_speed, 0.7, -0.7);
+    // scale(lift_speed, 0.1, 0.3, 0.7);
     // printf("sp=%d pos=%d lift speed = %5.2f\n", m_lift_sp, lift_position, lift_speed);
     output.lift = lift_speed;
 
@@ -394,7 +450,7 @@ void Robot::TeleopPeriodic()
     }
     else if (m_stick_d.GetRawButtonPressed(3))
     {
-      start_move(mv_back, SIZEOF_ARRAY(mv_back));
+      start_move(mv_back_shot, SIZEOF_ARRAY(mv_back_shot));
     }
 #if 0
     if (m_stick_o.GetRawButtonPressed(4))
@@ -418,25 +474,7 @@ void Robot::TeleopPeriodic()
     if (m_stick_d.GetRawAxis(2) > 0.5)
     {
         // get z from the pixy
-        int px, pa, color = m_alliance;
-        get_Pixy_xy(px, pa, color);
-        printf("px=%d pa=%d color=%d\n", px, pa, color);
-
-        if (color != 1 && color != 2) //blue or red not detected
-        {
-        } 
-        else if(px > -160 && px < 160 && pa > 10)
-        {
-          // target found
-          z = ((double)px / 60) * 0.25;
-          printf("px=%d z=%5.2f\n", px, z);
-        }
-        else
-        {
-          z = 0;
-        }
-
-        output.z = z;
+        steer_pixy(output.z, m_alliance);
     }
 
     // all motors should be updated every pass
@@ -494,73 +532,114 @@ void Robot::start_move(move_step_t *steps, int count)
 
 void Robot::evaluate_step(output_t &output)
 {
-    // default outputs
-    // TBD: arrange for last step to always be all off?
-    double y = 0.0;
-    double z = 0.0;
-    // double intake_speed = 0;
-    // double fw_speed = 0;
+  if (!move_active) return;   // use output defaults
 
-    if (move_active)
+  double t = m_timer.Get().value();
+  double elapsed = t - m_step_start;
+
+  // printf("elapsed=%5.2f\n", elapsed);
+  if (elapsed >= m_step.t)
+  {
+    // step timed out
+    next_step(t);
+
+    // done - TBD: short circuit, repeat last step, set step to 0s?
+    if (!move_active) return;
+
+    // cancel drive/heading
+    // - TODO: start_step()?
+    m_drive_active = false;
+    m_heading_active = false;
+  }
+
+  // default outputs
+  double y = m_step.y;
+  double z = m_step.z;
+
+#if 0
+  // TBD else if?
+  if (m_step.distance == 0 && m_step.heading == 0)
+  {
+    // no goals, time based only
+    output.y = y;
+    output.z = z;
+    output.intake = m_step.intake;
+    if (m_step.flywheel) output.flywheel = (m_step.flywheel) ? m_fw_sp1 : m_fw_sp2;
+  }
+  else
+  {
+    // may have one or more goals
+    bool distance_complete = (m_step.distance == 0);
+    if (!distance_complete)
     {
-      double t = m_timer.Get().value();
-      double elapsed = t - m_step_start;
+      y = drive_distance(m_step.distance);
+      z = drive_heading(0);
+      distance_complete = (fabs(y) < 0.001 && fabs(z) < 0.001);
+    }
 
-      printf("elapsed=%5.2f\n", elapsed);
-      if (elapsed >= m_step.t)
+    bool heading_complete = (m_step.heading != 0);
+    if (!heading_complete)    // TODO: This doesn't work for absolute heading?!
+    {
+      z = drive_heading(m_step.heading);
+      heading_complete = (fabs(z) < 0.001 );
+    }
+
+    if (distance_complete && heading_complete)
+    {
+      // goal complete, advance regardless of time
+      next_step(t);
+    }
+    else
+    {
+      output.y = y;
+      output.z = z;
+      output.intake = m_step.intake;
+      if (m_step.flywheel) output.flywheel = (m_step.flywheel == 1) ? m_fw_sp1 : m_fw_sp2;
+
+      if (m_step.pixy)
       {
-        // step timed out
-        next_step(t);
-
-        // elapsed = t - m_step_start;
-
-        // cancel drive/heading
-        // - TODO: start_step()?
-        m_drive_active = false;
-        m_heading_active = false;
-      }
-
-      // evaluate the current step
-      y = m_step.y;
-      z = m_step.z;
-
-      if (m_step.distance == 0 && m_step.heading == 0)
-      {
-        output.y = y;
-        output.z = z;
-        output.intake = m_step.intake;
-        if (m_step.flywheel) output.flywheel = (m_step.flywheel) ? m_fw_sp1 : m_fw_sp2;
-      }
-      else
-      {
-        bool distance_complete = (m_step.distance == 0);
-        if (!distance_complete)
-        {
-          y = drive_distance(m_step.distance);
-          z = drive_heading(0);
-          distance_complete = (fabs(y) < 0.001 && fabs(z) < 0.001);
-        }
-
-        bool heading_complete = (m_step.heading != 0);
-        if (!heading_complete)    // TODO: This doesn't work for absolute heading?!
-        {
-          z = drive_heading(m_step.heading);
-          heading_complete = (fabs(z) < 0.001 );
-        }
-
-        if (distance_complete && heading_complete)
-        {
-          next_step(t);
-        }
-        else
-        {
-          output.y = y;
-          output.z = z;
-          output.intake = m_step.intake;
-          if (m_step.flywheel) output.flywheel = (m_step.flywheel) ? m_fw_sp1 : m_fw_sp2;
-        }
+        // get z from the pixy
+        steer_pixy(output.z, m_alliance);
       }
     }
+  }
+#else
+  if (m_step.distance != 0 || m_step.heading != 0)
+  {
+    // there are one or more goals
+    bool distance_complete = (m_step.distance == 0);
+    if (!distance_complete)
+    {
+      y = drive_distance(m_step.distance);
+      z = drive_heading(0);
+      distance_complete = (fabs(y) < 0.001 && fabs(z) < 0.001);
+    }
+
+    bool heading_complete = (m_step.heading != 0);
+    if (!heading_complete)    // TODO: This doesn't work for absolute heading?!
+    {
+      z = drive_heading(m_step.heading);
+      heading_complete = (fabs(z) < 0.001 );
+    }
+
+    if (distance_complete && heading_complete)
+    {
+      // goals complete, advance regardless of time
+      next_step(t);
+    }
+  }
+
+  output.y = y;
+  output.z = z;
+  output.intake = m_step.intake;
+  if (m_step.flywheel) output.flywheel = (m_step.flywheel == 1) ? m_fw_sp1 : m_fw_sp2;
+  printf("fw=%5.2f\n", output.flywheel);
+  if (m_step.pixy)
+  {
+    // get z from the pixy
+    steer_pixy(output.z, m_alliance);
+  }
+#endif
 }
 
 void Robot::next_step(double t)
@@ -669,6 +748,29 @@ double Robot::drive_heading(double h, bool absolute)
     return z;
 }
 
+bool Robot::steer_pixy(double &z, int color)
+{
+  bool result = false;
+
+  int px, pa;
+  get_Pixy_xy(px, pa, color);
+  printf("px=%d pa=%d color=%d\n", px, pa, color);
+
+  if (color != 1 && color != 2) //blue or red not detected
+  {
+  } 
+  else if(px > -160 && px < 160 && pa > 10)
+  {
+    // target found
+    printf("px=%d\n", px);
+    z = ((double)px / 60) * 0.25;
+
+    result = true;
+  }
+
+  return result;
+}
+
 void Robot::update_outputs(output_t output)
 {
     // printf(">> y=%5.2f z=%5.2f\n", output.y, output.z);
@@ -771,7 +873,6 @@ int Robot::get_Pixy_xy(int& x, int& a, int& colorSignature)
 
     return true;
 }
-
 
 #ifndef RUNNING_FRC_TESTS
 int main() {

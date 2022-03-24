@@ -86,6 +86,7 @@ class Robot : public frc::TimedRobot
 
   double drive_distance(double d, bool absolute=false);
   double drive_heading(double h, bool absolute=false);
+  bool steer_pixy(double &z, int color);
 
   void update_outputs(output_t output);
   void drive(double y, double z, bool limit_accel=false);
