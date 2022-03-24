@@ -6,7 +6,7 @@
 
 #define SIZEOF_ARRAY(array_name) (sizeof(array_name) / sizeof(array_name[0]))
 
-static const char *version = "Rapid React v5.0x";
+static const char *version = "Rapid React v5.2x";
 
 static const int key_alt = 6;     // RB
 static const int key_retract = 1; // A
@@ -74,7 +74,7 @@ move_step_t mv_auto_3[] =
   {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
   // back up with intake running
   // {0.4, 0.0, 2.5, 0.0, 1, 0.0, 0.0, 0},
-  {0.0, 0.0, 5.5, 0.7, 0, 0.0, 45.0, 0},
+  {0.0, 0.0, 5.5, 0.7, 0, 0.0, -45.0, 0},
   {-0.22, 0.0, 5.5, 0.7, 0, 0.0, 0.0, 1},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
@@ -142,7 +142,7 @@ move_step_t mv_distance[] =
 move_step_t mv_heading[] =
 {
   // drive distance
-  {0.0, 0.0, 5.0, 0.0, 0, 0.0, 45.0, 0},
+  {0.0, 0.0, 5.0, 0.0, 0, 0.0, -45.0, 0},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
@@ -222,6 +222,8 @@ void Robot::RobotInit()
     m_ll_encoder.SetPositionConversionFactor(1.6);
     m_rl_encoder.SetPositionConversionFactor(1.6);
 
+    m_lift.SetNeutralMode(NeutralMode::Brake);
+    
     m_timer.Start();
     
     // set reference postion and orientation
@@ -367,8 +369,8 @@ void Robot::TeleopPeriodic()
     output.z = z;
 
 #if 0
-    double ll_pos = m_encoder_ll.GetPosition();
-    double rl_pos = m_encoder_rl.GetPosition();
+    double ll_pos = m_ll_encoder.GetPosition();
+    double rl_pos = m_rl_encoder.GetPosition();
     printf("p=%5.2f/%5.2f\n", ll_pos, rl_pos);
 #endif
 #if 0
@@ -405,7 +407,6 @@ void Robot::TeleopPeriodic()
 
     // lift control
     int lift_position = m_lift_position.GetValue();   
-    // printf("pos=%d\n", lift_position);
 
     if (!m_stick_o.GetRawButton(key_alt))
     {
@@ -615,7 +616,7 @@ void Robot::evaluate_step(output_t &output)
       distance_complete = (fabs(y) < 0.001 && fabs(z) < 0.001);
     }
 
-    bool heading_complete = (m_step.heading != 0);
+    bool heading_complete = (m_step.heading == 0);
     if (!heading_complete)    // TODO: This doesn't work for absolute heading?!
     {
       z = drive_heading(m_step.heading);
@@ -633,7 +634,7 @@ void Robot::evaluate_step(output_t &output)
   output.z = z;
   output.intake = m_step.intake;
   if (m_step.flywheel) output.flywheel = (m_step.flywheel == 1) ? m_fw_sp1 : m_fw_sp2;
-  printf("fw=%5.2f\n", output.flywheel);
+
   if (m_step.pixy)
   {
     // get z from the pixy
