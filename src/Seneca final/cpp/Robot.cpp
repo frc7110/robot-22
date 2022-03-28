@@ -10,7 +10,7 @@
   mv[0].t = delay;    \
   start_move(mv, SIZEOF_ARRAY(mv))
 
-static const char *version = "Rapid React v5.9.2";
+static const char *version = "Rapid React v5.9.2x";
 
 static const int key_alt = 6;     // RB
 static const int key_retract = 1; // A
