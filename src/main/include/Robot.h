@@ -109,6 +109,8 @@ class Robot : public frc::TimedRobot
 
     rev::SparkMaxRelativeEncoder m_fw_encoder = m_fw_motor.GetEncoder();
 
+    rev::SparkMaxPIDController m_pidController = m_fw_motor.GetPIDController();
+
     frc::DifferentialDrive m_robotDrive{m_ll_motor, m_rl_motor};
 
     frc::Timer m_timer;
@@ -140,9 +142,11 @@ class Robot : public frc::TimedRobot
     double m_fw_sp2;
     int m_lift_sp {0};
 
+    double m_measure;
+
     double m_direction {-1};
-    double accel_y_max {0.005};
-    double accel_z_max {0.01};
+    double accel_y_max {0.025};
+    double accel_z_max {0.02};
 
     size_t step_n;
     double m_step_start;

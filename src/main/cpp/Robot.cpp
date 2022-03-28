@@ -6,11 +6,23 @@
 
 #define SIZEOF_ARRAY(array_name) (sizeof(array_name) / sizeof(array_name[0]))
 
-static const char *version = "Rapid React v5.3x";
+#define START_MOVE(mv)  \
+  mv[0].t = delay;    \
+  start_move(mv, SIZEOF_ARRAY(mv))
+
+static const char *version = "Rapid React v5.9.2x";
 
 static const int key_alt = 6;     // RB
 static const int key_retract = 1; // A
 static const int key_extend = 4;  // Y
+
+// #define VELOCITY_CONTROL
+ 
+// default PID coefficients
+double kP = 6e-5, kI = 1e-6, kD = 0, kIz = 0, kFF = 0.000015, kMaxOutput = 1.0, kMinOutput = -1.0;
+
+// motor max RPM
+const double MaxRPM = 5700;
 
 // y, z, t, intake, fw, d, h, pixy
 
@@ -30,7 +42,7 @@ move_step_t mv_auto_1[] =
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
 
-// shoot, back up for cargo and return
+// 2 cargo - straight back
 move_step_t mv_auto_2[] =
 {
   // delay
@@ -53,7 +65,7 @@ move_step_t mv_auto_2[] =
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
 
-// shoot, back up for cargo and return
+// 2 cargo - straight back
 move_step_t mv_auto_3[] =
 {
   // delay
@@ -63,19 +75,92 @@ move_step_t mv_auto_3[] =
   // fire
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
+  // slight turn, back up with intake running
+  {0.0, 0.0, 1.5, 0.7, 0, 0.0, -25, 0},
+  {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 1},
+  // "chamber" the cargo
+  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  // reverse
+  {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
+  {0.0, 1.0, 1.0, 0.7, 0, 0.0, 0.0, 0},
+  // // fire
+  {0, 0.0, 1.0, 0.7, 1, 0.0, 1.0, 0},
+  // stop
+  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
+};
+
+// 2 cargo - pixy back
+move_step_t mv_auto_4[] =
+{
+  // delay
+  {0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0},
+  // spin up
+  {0.0, 0.0, 1.0, 0.0, 1, 0.0, 0.0, 0},
+  // fire
+  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
+  // slight turn, back up with intake running
+  {0.0, 0.0, 1.5, 0.7, 0, 0.0, -25, 0},
+  {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 1},
+  // "chamber" the cargo
+  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  // reverse
+  {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
+  {0.0, 1.0, 1.0, 0.0, 1, 0.0, 1.0, 0},
+  // fire
+  {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
+
+  // rotate toward terminal
+  {0.0, 0.0, 5.5, 0.7, 0, 0.0, -40.0, 0},
+  // drive toward terminal
+  {0.0, 0.0, 5.5, 0.7, 0, -150, 0.0, 0},
+  // enable pixy
+  {-0.22, 0.0, 5.5, 0.7, 0, 0, 0.0, 1},
+  // drive toward hub
+  {0.0, 0.0, 5.5, 0.7, 0, 170, 0.0, 0},
+  // rotate toward hub
+  {0.0, 0.0, 5.5, 0.7, 0, 0.0, 40.0, 0},
+  // "chamber" the cargo
+  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  // fire
+  {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
+
+  // stop
+  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
+};
+
+// 2 cargo + terminal
+move_step_t mv_auto_5[] =
+{
+  // delay
+  {0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0},
+  // spin up
+  {0.0, 0.0, 1.0, 0.0, 1, 0.0, 0.0, 0},
+  // fire
+  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
   // back up with intake running
-  // {0.4, 0.0, 2.5, 0.0, 1, 0.0, 0.0, 0},
-  {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 0},
+  {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 1},
   // "chamber" the cargo
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   // reverse
   {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
   // fire
   {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
-  // back up with intake running
-  // {0.4, 0.0, 2.5, 0.0, 1, 0.0, 0.0, 0},
-  {0.0, 0.0, 5.5, 0.7, 0, 0.0, -45.0, 0},
-  {-0.22, 0.0, 5.5, 0.7, 0, 0.0, 0.0, 1},
+  // rotate toward terminal
+  {0.0, 0.0, 5.5, 0.7, 0, 0.0, -40.0, 0},
+  // drive toward terminal
+  {0.0, 0.0, 5.5, 0.7, 0, -150, 0.0, 0},
+  // enable pixy
+  {-0.22, 0.0, 5.5, 0.7, 0, 0, 0.0, 1},
+  // drive toward hub
+  {0.0, 0.0, 5.5, 0.7, 0, 170, 0.0, 0},
+  // rotate toward hub
+  {0.0, 0.0, 5.5, 0.7, 0, 0.0, 40.0, 0},
+  // "chamber" the cargo
+  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  // fire
+  {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
@@ -112,21 +197,30 @@ move_step_t mv_back[] =
 move_step_t mv_back_shot[] =
 {
   // back up
-  {0.0, 0.0, 0.7, 0.0, 0, 12, 0.0, 0},
+  {0.0, 0.0, 0.7, 0.0, 1, 16, 0.0, 0},
   // all cargo to the top
-  {0.0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0},
+  // {0.0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0},
   // back cargo away from flywheel
   {0.0, 0.0, 0.6, -0.3, 0, 0.0, 0.0, 0},
   // spin up
-  {0.0, 0.0, 1.2, 0.0, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 1.0, 0.0, 1, 0.0, 0.0, 0},
   // shoot 1
   {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
   // recover
-  {0.0, 0.0, 0.7, 0.0, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 0.9, 0.0, 1, 0.0, 0.0, 0},
   // shoot 2
   {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
   // stop
   {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
+};
+
+// back up
+move_step_t mv_load[] =
+{
+  // all cargo to the top
+  {0.0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0},
+  // back cargo away from flywheel
+  {0.0, 0.0, 0.6, -0.3, 0, 0.0, 0.0, 0},
 };
 
 move_step_t none[] =
@@ -212,6 +306,16 @@ void Robot::RobotInit()
     m_ll_encoder.SetPosition(0);
     m_rl_encoder.SetPosition(0);
 
+#ifdef VELOCITY_CONTROL    
+    // set PID coefficients
+    m_pidController.SetP(kP);
+    m_pidController.SetI(kI);
+    m_pidController.SetD(kD);
+    m_pidController.SetIZone(kIz);
+    m_pidController.SetFF(kFF);
+    m_pidController.SetOutputRange(kMinOutput, kMaxOutput);
+#endif
+
     m_gyro.Reset();
 
     camera1 = frc::CameraServer::StartAutomaticCapture();
@@ -235,10 +339,12 @@ void Robot::RobotInit()
 
     frc::SmartDashboard::PutNumber("delay", 0);
     frc::SmartDashboard::PutNumber("auto", 2);
-    frc::SmartDashboard::PutNumber("fw_sp1", 0.55);
-    frc::SmartDashboard::PutNumber("fw_sp2", 0.35);
+    frc::SmartDashboard::PutNumber("fw_sp1", 0.56);
+    frc::SmartDashboard::PutNumber("fw_sp2", 0.4);
 
     frc::SmartDashboard::PutNumber("P", 0.002);
+
+    frc::SmartDashboard::PutNumber("measure", 0);
 
     m_alliance = frc::DriverStation::GetAlliance();
 
@@ -249,6 +355,8 @@ void Robot::RobotPeriodic() {}
 
 void Robot::AutonomousInit() 
 {
+    printf("%s %s %s\n", version, __DATE__, __TIME__);
+
     m_timer.Start();
 
     double delay = frc::SmartDashboard::GetNumber("delay", 0);
@@ -277,8 +385,22 @@ void Robot::AutonomousInit()
     }
     else if (auto_selection == 3)
     {
-      mv_auto_2[0].t = delay;
+      mv_auto_3[0].t = delay;
       start_move(mv_auto_3, SIZEOF_ARRAY(mv_auto_3));
+    }
+    else if (auto_selection == 4)
+    {
+      mv_auto_4[0].t = delay;
+      start_move(mv_auto_4, SIZEOF_ARRAY(mv_auto_4));
+    }
+    else if (auto_selection == 5)
+    {
+      mv_auto_5[0].t = delay;
+      start_move(mv_auto_5, SIZEOF_ARRAY(mv_auto_5));
+    }
+    else if (auto_selection == 6)
+    {
+      START_MOVE(mv_load);
     }
 }
 
@@ -292,6 +414,8 @@ void Robot::AutonomousPeriodic()
 
 void Robot::TeleopInit() 
 {
+    printf("%s %s %s\n", version, __DATE__, __TIME__);
+
     // reading the dashboard here simplifies test cycles
     m_fw_sp1 = frc::SmartDashboard::GetNumber("fw_sp1", 5);
     while (m_fw_sp1 < -1.0 || m_fw_sp1 > 1.0) {
@@ -308,7 +432,10 @@ void Robot::TeleopInit()
     m_alliance = frc::DriverStation::GetAlliance();
 
     double P = frc::SmartDashboard::GetNumber("P", 0);
+
     m_lift_pid.SetP(P);
+
+    m_measure  = frc::SmartDashboard::GetNumber("measure", 0);
 
     m_lift_sp = m_lift_position.GetValue();
 
@@ -360,6 +487,11 @@ void Robot::TeleopPeriodic()
     double rl_velocity = m_rl_encoder.GetVelocity();
     printf("v=%5.2f/%5.2f\n", ll_velocity, rl_velocity);
 #endif
+    if (m_measure)
+    {
+      frc::SmartDashboard::PutNumber("d", m_ll_encoder.GetPosition());
+      frc::SmartDashboard::PutNumber("h", m_gyro.GetAngle());
+    }
 
     double lift_speed = 0;
     double fw_speed = 0;
@@ -434,6 +566,7 @@ void Robot::TeleopPeriodic()
     else if (m_stick_d.GetRawButtonPressed(3))
     {
       start_move(mv_back_shot, SIZEOF_ARRAY(mv_back_shot));
+      // start_move(mv_load, SIZEOF_ARRAY(mv_load));
     }
 #if 0
     // abort move?
@@ -451,8 +584,9 @@ void Robot::TeleopPeriodic()
         steer_pixy(output.z, m_alliance);
     }
 
-#if 1
+#if 0
     if (output.flywheel != 0) printf("fw v=%5.2f\n", m_fw_encoder.GetVelocity());
+    if (output.flywheel != 0) frc::SmartDashboard::PutNumber("fw", m_fw_encoder.GetVelocity());
 #endif
 
     // all motors should be updated every pass
@@ -547,7 +681,7 @@ void Robot::evaluate_step(output_t &output)
     bool heading_complete = (m_step.heading == 0);
     if (!heading_complete)    // TODO: This doesn't work for absolute heading?!
     {
-      z = drive_heading(m_step.heading);
+      z = drive_heading(m_step.heading, m_step.z > 0.0);
       heading_complete = (fabs(z) < 0.001 );
     }
 
@@ -604,7 +738,7 @@ double Robot::drive_distance(double d, bool absolute)
     if (!m_drive_active)
     {
       l_sp = absolute ? d : d + l_position;
-      printf("d=%5.2f lp=%5.2f sp=%5.2f\n", d, l_position, l_sp);
+      // printf("d=%5.2f lp=%5.2f sp=%5.2f\n", d, l_position, l_sp);
       // r_sp = absolute ? d : d + r_position;
       // printf("d=%5.2f rp=%5.2f sp=%5.2f\n", d, r_position, r_sp);
       m_drive_active = true;
@@ -616,8 +750,10 @@ double Robot::drive_distance(double d, bool absolute)
     double sign = dd >= 0.0 ? 1.0 : -1.0;
     double magnitude = dd * sign;
 
-    if (magnitude > 30)
+    if (magnitude > 90)
       y = -0.4;
+    else if (magnitude > 40)
+      y = -0.3;
     else if (magnitude > 10)
       y = -0.2;
     else if (magnitude > 3)
@@ -648,7 +784,7 @@ double Robot::drive_heading(double h, bool absolute)
     {
       m_heading_sp = absolute ? h : h + currentAngle;
       m_heading_active = true;
-      printf("h=%5.2f a=%5.2f sp=%5.2f\n", h, currentAngle, m_heading_sp);
+      // printf("h=%5.2f a=%5.2f sp=%5.2f\n", h, currentAngle, m_heading_sp);
     }
 
     double z = 0;
@@ -682,7 +818,7 @@ bool Robot::steer_pixy(double &z, int color)
 
   int px, pa;
   get_Pixy_xy(px, pa, color);
-  printf("px=%d pa=%d color=%d\n", px, pa, color);
+  // printf("px=%d pa=%d color=%d\n", px, pa, color);
 
   if (color != 1 && color != 2) //blue or red not detected
   {
@@ -690,7 +826,7 @@ bool Robot::steer_pixy(double &z, int color)
   else if(px > -160 && px < 160 && pa > 10)
   {
     // target found
-    printf("px=%d\n", px);
+    // printf("px=%d\n", px);
     z = ((double)px / 60) * 0.25;
 
     result = true;
@@ -705,12 +841,17 @@ void Robot::update_outputs(output_t output)
     // printf("   in=%5.2f fw=%5.2f, l=%5.2f\n", output.intake, output.flywheel, output.lift);
 
     // update outputs regardless of state
-    drive(output.y, output.z, false);
+    drive(output.y, output.z, true);
 
     m_intake_1.Set(output.intake);
     m_intake_2.Set(output.intake);
-    m_fw_motor.Set(-output.flywheel);
     m_lift.Set(output.lift);
+
+#ifdef VELOCITY_CONTROL    
+    m_pidController.SetReference(output.flywheel, rev::ControlType::kVelocity);
+#else
+    m_fw_motor.Set(-output.flywheel);
+#endif
 }
 
 void Robot::drive(double y, double z, bool limit_accel)
@@ -725,6 +866,8 @@ void Robot::drive(double y, double z, bool limit_accel)
     double dy = y - last_y;
     double dz = z - last_z;
 
+    printf("1: y=%5.2f/%5.2f z=%5.2f/%5.2f\n", y, dy, z, dz);
+
     if (limit_accel)
     {
       clamp(dy, accel_y_max, -accel_y_max);
@@ -737,6 +880,8 @@ void Robot::drive(double y, double z, bool limit_accel)
     if (tmp_y != last_y || tmp_z != last_z)
     {
       // printf("y: %5.2f => %5.2f / x: %5.2f => %5.2f\n", y, last_y, z, last_z);
+
+      printf("2: y=%5.2f/%5.2f z=%5.2f/%5.2f\n", last_y, dy, last_z, dz);
     }
 
     m_robotDrive.ArcadeDrive(-last_y, last_z, false);
@@ -766,7 +911,7 @@ int Robot::get_Pixy_xy(int& x, int& a, int& colorSignature)
     a = receiveBufffer[19];
     x = xDirectionValue - 160;
 
-    printf("pixy: index=%d x=%d color=%d\n", receiveBufffer[18], xDirectionValue, colorSignature);
+    // printf("pixy: index=%d x=%d color=%d\n", receiveBufffer[18], xDirectionValue, colorSignature);
 
     return true;
 }
