@@ -4,27 +4,35 @@
 
 #include "Robot.h"
 
-#define SIZEOF_ARRAY(array_name) (sizeof(array_name) / sizeof(array_name[0]))
+static const char *version = "Rapid React v5.10.1";
 
-#define START_MOVE(mv)  \
-  mv[0].t = delay;    \
-  start_move(mv, SIZEOF_ARRAY(mv))
+// speed limits
+// -turbo mode
+static double y_max_v_turbo = .8;
+// - lift is down
+static double y_max_v_dn = .6;
+static double z_max_v_dn = .3;
+// - lift is up
+static double y_max_v_up = .32;
+static double z_max_v_up = .25;
 
-static const char *version = "Rapid React v5.9.2x";
+// acceleration limits
+static double accel_y_max = 0.025;
+static double accel_z_max = 0.02;
+
+// lift setpoints
+static double lift_high = 1340;
+static double lift_low = 400;
 
 static const int key_alt = 6;     // RB
 static const int key_retract = 1; // A
 static const int key_extend = 4;  // Y
 
-// #define VELOCITY_CONTROL
- 
-// default PID coefficients
-double kP = 6e-5, kI = 1e-6, kD = 0, kIz = 0, kFF = 0.000015, kMaxOutput = 1.0, kMinOutput = -1.0;
+// autonomous operations
+// - all sequences should have a delay line
 
-// motor max RPM
-const double MaxRPM = 5700;
-
-// y, z, t, intake, fw, d, h, pixy
+// table columns are:
+// y speed, z speed, time, intake speed, flywheel speed selection, distance, heading, pixy enable
 
 // shoot and back away
 move_step_t mv_auto_1[] =
@@ -33,13 +41,11 @@ move_step_t mv_auto_1[] =
   {0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0},
   // spin up
   {0.0, 0.0, 1.0, 0.0, 1, 0.0, 0.0, 0},
-  // shoot
+  // fire
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
-  // drive
+  // back up
   {-0.2, 0.0, 1.5, 0.0, 0, 0.0, 0.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
 
 // 2 cargo - straight back
@@ -48,21 +54,38 @@ move_step_t mv_auto_2[] =
   // delay
   {0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0},
   // spin up
-  {0.0, 0.0, 1.0, 0.0, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 2.0, 0.0, 1, 0.0, 0.0, 0},
   // fire
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
   // back up with intake running
-  // {0.4, 0.0, 2.5, 0.0, 1, 0.0, 0.0, 0},
   {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 0},
   // "chamber" the cargo
-  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 0.2, 0.0, 1, 0.0, 0.0, 0},
   // reverse
   {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
   // fire
   {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
+};
+
+// 2 cargo - straight back
+move_step_t mv_auto_2b[] =
+{
+  // delay
+  {0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0},
+  // back up with intake running
+  {-0.22, 0.0, 2.0, 0.0, 0, 0.0, 0.0, 0},
+  {-0.22, 0.0, 0.7, 0.7, 0, 0.0, 0.0, 0},
+  // "chamber" the cargo
+  {0.0, 0.0, 0.2, -0.3, 0, 0.0, 0.0, 0},
+  // reverse
+  {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
+  // fire 1
+  {0, 0.0, 0.5, 0.7, 1, 0.0, 0.0, 0},
+  // recover
+  {0.0, 0.0, 1.2, 0.0, 1, 0.0, 0.0, 0},
+  // fire 2
+  {0.0, 0.0, 0.5, 0.7, 1, 0.0, 0.0, 0},
 };
 
 // 2 cargo - straight back
@@ -76,17 +99,16 @@ move_step_t mv_auto_3[] =
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
   // slight turn, back up with intake running
-  {0.0, 0.0, 1.5, 0.7, 0, 0.0, -25, 0},
-  {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 1},
+  {0.0, 0.0, 1.5, 0.7, 0, 0.0, -30, 0},
+  {0.0, 0.0, 2.5, 0.7, 0, 80.0, 0.0, 1},
+  {0.0, 0.0, 1.0, 0.7, 0, 0.0, 0.0, 0},
   // "chamber" the cargo
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   // reverse
-  {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
-  {0.0, 1.0, 1.0, 0.7, 0, 0.0, 0.0, 0},
+  {0.0, 0.0, 2.4, 0.0, 1, -70.0, 0.0, 0},
+  {0.0, 0.0, 1.5, 0.0, 1, 0.0, 30, 0},
   // // fire
-  {0, 0.0, 1.0, 0.7, 1, 0.0, 1.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
+  {0.0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
 };
 
 // 2 cargo - pixy back
@@ -124,9 +146,6 @@ move_step_t mv_auto_4[] =
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   // fire
   {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
-
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
 
 // 2 cargo + terminal
@@ -139,31 +158,36 @@ move_step_t mv_auto_5[] =
   // fire
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   {0.0, 0.0, 1.5, 0.7, 1, 0.0, 0.0, 0},
-  // back up with intake running
-  {-0.22, 0.0, 2.5, 0.7, 0, 0.0, 0.0, 1},
+  // slight turn, back up with intake running
+  {0.0, 0.0, 1.5, 0.7, 0, 0.0, -30, 0},
+  {0.0, 0.0, 2.5, 0.7, 0, 80.0, 0.0, 1},
+  {0.0, 0.0, 1.0, 0.7, 0, 0.0, 0.0, 0},
+
+  {0.0, 0.0, 1.5, 0.7, 0, 0.0, -10, 0},
+  {0.0, 0.0, 2.5, 0.7, 0, 105.0, 0.0, 1},
+  {0.0, 0.0, 1.0, 0.7, 0, 0.0, 0.0, 0},
   // "chamber" the cargo
   {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
   // reverse
-  {0.22, 0.0, 2.4, 0.0, 1, 0.0, 0.0, 0},
-  // fire
-  {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
-  // rotate toward terminal
-  {0.0, 0.0, 5.5, 0.7, 0, 0.0, -40.0, 0},
-  // drive toward terminal
-  {0.0, 0.0, 5.5, 0.7, 0, -150, 0.0, 0},
-  // enable pixy
-  {-0.22, 0.0, 5.5, 0.7, 0, 0, 0.0, 1},
-  // drive toward hub
-  {0.0, 0.0, 5.5, 0.7, 0, 170, 0.0, 0},
-  // rotate toward hub
-  {0.0, 0.0, 5.5, 0.7, 0, 0.0, 40.0, 0},
-  // "chamber" the cargo
-  {0.0, 0.0, 0.2, -0.3, 1, 0.0, 0.0, 0},
-  // fire
-  {0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
+  {0.0, 0.0, 2.4, 0.0, 1, -200.0, 0.0, 0},
+  {0.0, 0.0, 1.5, 0.0, 1, 0.0, 35, 0},
+  // // fire
+  {0.0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
 };
+
+// auton selections - position determines numbering
+// - first entry is selection #1
+// - all auton moves must be defined above this line
+struct auto_tbl_t auton_selections[] =
+{
+  {AUTON(mv_auto_1)},
+  {AUTON(mv_auto_2)},
+  {AUTON(mv_auto_3)},
+  {AUTON(mv_auto_4)},
+  {AUTON(mv_auto_5)},
+};
+
+// additional computer assisted operations
 
 // shoot
 move_step_t mv_shoot_low[] =
@@ -174,14 +198,12 @@ move_step_t mv_shoot_low[] =
   {0.0, 0.0, 0.3, -0.3, 0, 0.0, 0.0, 0},
   // spin up
   {0.0, 0.0, 1.0, 0.0, 2, 0.0, 0.0, 0},
-  // shoot 1
+  // fire 1
   {0.0, 0.0, 0.3, 0.7, 2, 0.0, 0.0, 0},
   // recover
   {0.0, 0.0, 0.5, 0.0, 2, 0.0, 0.0, 0},
-  // shoot 2
+  // fire 2
   {0.0, 0.0, 0.3, 0.7, 2, 0.0, 0.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
 
 // back up
@@ -189,11 +211,9 @@ move_step_t mv_back[] =
 {
   // back up
   {0.0, 0.0, 0.7, 0.0, 0, 12, 0.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
 
-// back up
+// back up and fire
 move_step_t mv_back_shot[] =
 {
   // back up
@@ -204,23 +224,78 @@ move_step_t mv_back_shot[] =
   {0.0, 0.0, 0.6, -0.3, 0, 0.0, 0.0, 0},
   // spin up
   {0.0, 0.0, 1.0, 0.0, 1, 0.0, 0.0, 0},
-  // shoot 1
+  // fire 1
   {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
   // recover
   {0.0, 0.0, 0.9, 0.0, 1, 0.0, 0.0, 0},
-  // shoot 2
+  // fire 2
   {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
-  // stop
-  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 0.0, 0},
 };
 
-// back up
+move_step_t mv_back_shot2[] =
+{
+  // back cargo away from flywheel
+  // - while starting to spin it up?!
+  {0.0, 0.0, 0.6, -0.3, 1, 0.0, 0.0, 0},
+  // back up
+  {0.0, 0.0, 0.7, 0.0, 1, 16, 0.0, 0},
+  // additional spin up?
+  {0.0, 0.0, 0.5, 0.0, 1, 0.0, 0.0, 0},
+  // fire 1
+  {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
+  // recover
+  {0.0, 0.0, 0.9, 0.0, 1, 0.0, 0.0, 0},
+  // fire 2
+  {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
+};
+
+// "chamber" cargo
 move_step_t mv_load[] =
 {
   // all cargo to the top
-  {0.0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0},
+  {0.0, 0.0, 0.5, 0.7, 0, 0.0, 0.0, 0},
   // back cargo away from flywheel
-  {0.0, 0.0, 0.6, -0.3, 0, 0.0, 0.0, 0},
+  {0.0, 0.0, 0.5, -0.3, 0, 0.0, 0.0, 0},
+};
+
+// eject cargo
+move_step_t mv_eject[] =
+{
+  // all cargo to the top
+  {0.0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0},
+  // spin up to low speed
+  {0.0, 0.0, 0.5, 0.0, 3, 0.0, 0.0, 0},
+  // feed cargo up
+  {0.0, 0.0, 0.5, 0.7, 3, 0.0, 0.0, 0},
+  // speed up to eject
+  {0.0, 0.0, 0.5, 0.0, 1, 0.0, 0.0, 0},
+};
+
+move_step_t mv_turn[] =
+{
+  // turn test
+  {0.0, 0.0, 0.5, 0.0, 0, 0.0, 15.0, 0},
+  {0.0, 0.0, 1.5, 0.0, 0, 0.0, 0.0, 0},
+  {0.0, 0.0, 0.5, 0.0, 0, 0.0, -45.0, 0},
+  {0.0, 0.0, 1.5, 0.0, 0, 0.0, 0.0, 0},
+  {0.0, 1.0, 2.0, 0.0, 0, 0.0, 1.0, 0},
+};
+
+move_step_t mv_drive[] =
+{
+  // drive_test
+  {0.0, 0.0, 0.5, 0.0, 0, 6.0, 0.0, 0},
+  {0.0, 0.0, 1.5, 0.0, 0, 0.0, 0.0, 0},
+  {0.0, 0.0, 0.5, 0.0, 0, -10.0, 0.0, 0},
+  {0.0, 0.0, 1.5, 0.0, 0, 0.0, 0.0, 0},
+  {0.1, 0.0, 2.0, 0.0, 0, 0.1, 0.0, 0},
+};
+
+move_step_t mv_shoot_low_game[] =
+{
+  {0.0, 0.0, 0.2, -0.3, 0, 0, 0, 0},
+  {0.0, 0.0, 2, 0.0, 3, 0, 0, 0},
+  {0.0, 0.0, 2, 0.8, 3, 0, 0, 0},
 };
 
 move_step_t none[] =
@@ -261,7 +336,7 @@ void scale(double &value, const double deadband, const double ll, const double u
 
   //printf("2: value=%5.2f\n", value);
 
-  // scale based output range / input range
+  // scale based on output range / input range
   value *= ((ul - ll) / (1.0 - deadband));
 
   //printf("3: value=%5.2f\n", value);
@@ -274,10 +349,41 @@ void scale(double &value, const double deadband, const double ll, const double u
   //printf("4: value=%5.2f\n", value);
 }
 
+double normalize(double v)
+{
+  while (v < -1.0 || v > 1.0)  v /= 10;
+
+  return v;
+}
+
+#if 0
+//Attempt to set up advanced camera server program. Will need more work. 
+void VisionThread() 
+{  
+  cs::UsbCamera camera = frc::CameraServer::StartAutomaticCapture();
+  camera.SetConnectionStrategy(cs::VideoSource::ConnectionStrategy::kConnectionKeepOpen);
+  camera.SetResolution(320, 240);
+  camera.SetFPS(15);
+
+  cs::CvSink cvSink = frc::CameraServer::GetVideo();
+  cs::CvSource outputStreamStd = frc::CameraServer::PutVideo("Gray", 320, 240);
+  cv::Mat source;
+  cv::Mat output;
+  while(true) {
+    if (cvSink.GrabFrame(source) == 0) {
+      continue;
+    }
+
+    cv::line(source, cv::Point(160, 0), cv::Point(160, 230), cv::Scalar(0, 255, 0), 2, cv::LineTypes::LINE_8, 0);
+
+    outputStreamStd.PutFrame(source);
+  }
+}
+#endif
 
 void Robot::RobotInit() 
 {
-    printf("%s %s %s\n", version, __DATE__, __TIME__);
+    printf("%s%s %s %s\n", version, BRANCH, __DATE__, __TIME__);
 
     m_ll_motor.RestoreFactoryDefaults();
     m_rl_motor.RestoreFactoryDefaults();
@@ -318,12 +424,13 @@ void Robot::RobotInit()
 
     m_gyro.Reset();
 
+#if 1
     camera1 = frc::CameraServer::StartAutomaticCapture();
     camera1.SetConnectionStrategy(cs::VideoSource::ConnectionStrategy::kConnectionKeepOpen);
     camera1.SetResolution(320, 240);
     // camera1.SetResolution(320, 180);  // Lifecam supports 16:9?
     camera1.SetFPS(15);
-
+#endif
 #if 0
     camera2 = frc::CameraServer::StartAutomaticCapture();
     camera2.SetConnectionStrategy(cs::VideoSource::ConnectionStrategy::kConnectionKeepOpen);
@@ -332,6 +439,9 @@ void Robot::RobotInit()
     camera2.SetFPS(15);
 #endif
 
+//    std::thread visionThread(VisionThread);
+//    visionThread.detach();
+
     cameraSelection = nt::NetworkTableInstance::GetDefault().GetTable("")->GetEntry("CameraSelection");
 
     // sync direction and camera selection
@@ -339,12 +449,15 @@ void Robot::RobotInit()
 
     frc::SmartDashboard::PutNumber("delay", 0);
     frc::SmartDashboard::PutNumber("auto", 2);
+
     frc::SmartDashboard::PutNumber("fw_sp1", 0.56);
     frc::SmartDashboard::PutNumber("fw_sp2", 0.4);
+    frc::SmartDashboard::PutNumber("fw_sp3", 0.35);
 
     frc::SmartDashboard::PutNumber("P", 0.002);
+    frc::SmartDashboard::PutNumber("I", 0.000001);
 
-    frc::SmartDashboard::PutNumber("measure", 0);
+    frc::SmartDashboard::PutBoolean("TURBO", false);
 
     m_alliance = frc::DriverStation::GetAlliance();
 
@@ -355,52 +468,34 @@ void Robot::RobotPeriodic() {}
 
 void Robot::AutonomousInit() 
 {
-    printf("%s %s %s\n", version, __DATE__, __TIME__);
+    double delay = frc::SmartDashboard::GetNumber("delay", 0);
+    unsigned int auto_selection = frc::SmartDashboard::GetNumber("auto", 1);
+
+    m_fw_sp1 = normalize(frc::SmartDashboard::GetNumber("fw_sp1", 0));
+    m_fw_sp2 = normalize(frc::SmartDashboard::GetNumber("fw_sp2", 0));
+    m_fw_sp3 = normalize(frc::SmartDashboard::GetNumber("fw_sp3", 0));
+
+    printf("fw_speed=%5.2f/%5.2f/%5.2f\n", m_fw_sp1, m_fw_sp2, m_fw_sp3);
+
+    // set reference postion and orientation
+    m_ll_encoder.SetPosition(0);
+    m_rl_encoder.SetPosition(0);
+
+    m_gyro.Reset();
 
     m_timer.Start();
 
-    double delay = frc::SmartDashboard::GetNumber("delay", 0);
-    int auto_selection = frc::SmartDashboard::GetNumber("auto", 1);
+    printf("auto=%d, delay=%5.2f\n", auto_selection, delay);
 
-    m_fw_sp1 = frc::SmartDashboard::GetNumber("fw_sp1", 0);
-    while (m_fw_sp1 < -1.0 || m_fw_sp1 > 1.0) {
-      m_fw_sp1 /= 10;
-    }
-
-    m_fw_sp2 = frc::SmartDashboard::GetNumber("fw_sp2", 0);
-    while (m_fw_sp2 < -1.0 || m_fw_sp2 > 1.0) {
-      m_fw_sp2 /= 10;
-    }
-
-    printf("auto=%d\n", auto_selection);
-    if (auto_selection == 1)
+    auto_selection -= 1;  // zero based indexing
+    if (auto_selection < SIZEOF_ARRAY(auton_selections))
     {
-      mv_auto_1[0].t = delay;
-      start_move(mv_auto_1, SIZEOF_ARRAY(mv_auto_1));
+      start_move(auton_selections[auto_selection].move, auton_selections[auto_selection].n);
+      m_step.t = delay;
     }
-    else if (auto_selection == 2)
+    else
     {
-      mv_auto_2[0].t = delay;
-      start_move(mv_auto_2, SIZEOF_ARRAY(mv_auto_2));
-    }
-    else if (auto_selection == 3)
-    {
-      mv_auto_3[0].t = delay;
-      start_move(mv_auto_3, SIZEOF_ARRAY(mv_auto_3));
-    }
-    else if (auto_selection == 4)
-    {
-      mv_auto_4[0].t = delay;
-      start_move(mv_auto_4, SIZEOF_ARRAY(mv_auto_4));
-    }
-    else if (auto_selection == 5)
-    {
-      mv_auto_5[0].t = delay;
-      start_move(mv_auto_5, SIZEOF_ARRAY(mv_auto_5));
-    }
-    else if (auto_selection == 6)
-    {
-      START_MOVE(mv_load);
+      start_move(none, 1);
     }
 }
 
@@ -414,28 +509,22 @@ void Robot::AutonomousPeriodic()
 
 void Robot::TeleopInit() 
 {
-    printf("%s %s %s\n", version, __DATE__, __TIME__);
-
     // reading the dashboard here simplifies test cycles
-    m_fw_sp1 = frc::SmartDashboard::GetNumber("fw_sp1", 5);
-    while (m_fw_sp1 < -1.0 || m_fw_sp1 > 1.0) {
-      m_fw_sp1 /= 10;
-    }
+    m_fw_sp1 = normalize(frc::SmartDashboard::GetNumber("fw_sp1", 0));
+    m_fw_sp2 = normalize(frc::SmartDashboard::GetNumber("fw_sp2", 0));
+    m_fw_sp3 = normalize(frc::SmartDashboard::GetNumber("fw_sp3", 0));
 
-    m_fw_sp2 = frc::SmartDashboard::GetNumber("fw_sp2", 0);
-    while (m_fw_sp2 < -1.0 || m_fw_sp2 > 1.0) {
-      m_fw_sp2 /= 10;
-    }
+    printf("fw_speed=%5.2f/%5.2f/%5.2f\n", m_fw_sp1, m_fw_sp2, m_fw_sp3);
 
-    printf("fw_speed=%5.2f/%5.2f\n", m_fw_sp1, m_fw_sp2);
+    turbo = frc::SmartDashboard::GetBoolean("TURBO", false);
 
     m_alliance = frc::DriverStation::GetAlliance();
 
     double P = frc::SmartDashboard::GetNumber("P", 0);
+    // double I = frc::SmartDashboard::GetNumber("I", 0);
 
     m_lift_pid.SetP(P);
-
-    m_measure  = frc::SmartDashboard::GetNumber("measure", 0);
+    // m_lift_pid.SetI(I);
 
     m_lift_sp = m_lift_position.GetValue();
 
@@ -452,46 +541,42 @@ void Robot::TeleopPeriodic()
 {
     output_t output;
 
+#if 0
     // select camera
     if (m_stick_d.GetRawButtonPressed(5))
     {
       m_camera = (m_camera == 1) ? 2 : 1;
       set_camera_selection();
     }
+#endif
 
     // driver input
     double y = m_stick_d.GetRawAxis(1) * m_direction;
     double z = m_stick_d.GetRawAxis(4);
 
-    if (m_lift_sp < 1000)
+if (turbo) {
+
+    if (m_lift_sp < 1.20 * lift_low)
     {
-      scale(y, 0.05, 0.0, .6);
-      scale(z, 0.05, 0.0, .3);
+      if (m_stick_d.GetRawButton(5))
+      {
+        // turbo is mode only allowed with lift down
+        scale(y, 0.05, 0.0, 1);
+      }
+      else
+      {
+        scale(y, 0.05, 0.0, y_max_v_dn);
+      }
+      scale(z, 0.05, 0.0, z_max_v_dn);
     }
     else
     {
-      scale(y, 0.05, 0.0, .32);
-      scale(z, 0.05, 0.0, .25);
+      scale(y, 0.05, 0.0, y_max_v_up);
+      scale(z, 0.05, 0.0, z_max_v_up);
     }
   
     output.y = y;
     output.z = z;
-
-#if 0
-    double ll_pos = m_ll_encoder.GetPosition();
-    double rl_pos = m_rl_encoder.GetPosition();
-    printf("p=%5.2f/%5.2f\n", ll_pos, rl_pos);
-#endif
-#if 0
-    double ll_velocity = m_ll_encoder.GetVelocity();
-    double rl_velocity = m_rl_encoder.GetVelocity();
-    printf("v=%5.2f/%5.2f\n", ll_velocity, rl_velocity);
-#endif
-    if (m_measure)
-    {
-      frc::SmartDashboard::PutNumber("d", m_ll_encoder.GetPosition());
-      frc::SmartDashboard::PutNumber("h", m_gyro.GetAngle());
-    }
 
     double lift_speed = 0;
     double fw_speed = 0;
@@ -511,7 +596,7 @@ void Robot::TeleopPeriodic()
     // intake control
     if (m_stick_o.GetRawButton(2))
     {
-      intake_speed = 0.5;
+      intake_speed = 0.8;
     }
     else if (m_stick_o.GetRawButton(3))
     {
@@ -526,11 +611,11 @@ void Robot::TeleopPeriodic()
     {
       if (m_stick_o.GetRawButtonPressed(key_extend))
       {
-        m_lift_sp = 1340;
+        m_lift_sp = lift_high;
       }
       else if (m_stick_o.GetRawButtonPressed(key_retract))
       {
-        m_lift_sp = 400;
+        m_lift_sp = lift_low;
       }
 
       lift_speed = m_lift_pid.Calculate(lift_position, m_lift_sp);
@@ -561,27 +646,22 @@ void Robot::TeleopPeriodic()
     // start auto move?
     if (m_stick_d.GetRawButtonPressed(2))
     {
-      start_move(mv_shoot_low, SIZEOF_ARRAY(mv_shoot_low));
+      START_MOVE(mv_shoot_low);
     }
     else if (m_stick_d.GetRawButtonPressed(3))
     {
-      start_move(mv_back_shot, SIZEOF_ARRAY(mv_back_shot));
-      // start_move(mv_load, SIZEOF_ARRAY(mv_load));
+      START_MOVE(mv_back_shot);
     }
-#if 0
-    // abort move?
-    if (m_stick_o.GetRawButtonPressed(1))
-    {
-      move_active = false;
-    }
-#endif
 
     evaluate_step(output);
 
     if (m_stick_d.GetRawAxis(2) > 0.5)
     {
+        int color = m_alliance;
+        if (m_stick_d.GetRawButton(4)) color = (m_alliance == 1 ? 2 : 1);
+
         // get z from the pixy
-        steer_pixy(output.z, m_alliance);
+        steer_pixy(output.z, color);
     }
 
 #if 0
@@ -591,6 +671,157 @@ void Robot::TeleopPeriodic()
 
     // all motors should be updated every pass
     update_outputs(output);
+}
+#if 0
+else {
+  scale(y, 0.05, 0, 0.3);
+  scale(z, 0.05, 0, 0.25);
+
+  double fw_speed = 0;
+
+if (m_stick_d.GetRawAxis(3) > 0.5)
+    {
+      fw_speed = m_fw_sp2;
+    }
+    output.flywheel = fw_speed;
+
+  m_intake_2.Set(0.8);
+
+if (m_stick_o.GetRawButton(2))
+    {
+      m_intake_1.Set(0.8);
+    }
+    else if (m_stick_o.GetRawButton(3))
+    {
+      m_intake_1.Set(-0.3);
+    } else{ 
+      m_intake_1.Set(0);
+    }
+
+    double lift_speed = 0;
+clamp(lift_speed, -0.7, 0.7);
+int lift_position = m_lift_position.GetValue();   
+lift_speed = m_lift_pid.Calculate(lift_position, m_lift_sp);
+
+      if (m_stick_o.GetRawButtonPressed(key_extend))
+      {
+        m_lift_sp = lift_high;
+      }
+      else if (m_stick_o.GetRawButtonPressed(key_retract))
+      {
+        m_lift_sp = lift_low;
+      }
+
+      lift_speed = m_lift_pid.Calculate(lift_position, m_lift_sp);
+          double lift_speed = 0;
+    }
+}
+#endif
+else{
+  
+    //drive controls
+    #if 0
+    if (m_lift_sp < 1.20 * lift_low)
+    {
+      if (m_stick_d.GetRawButton(5))
+      {
+        // turbo is mode only allowed with lift down
+        scale(y, 0.05, 0.0, y_max_v_turbo);
+      }
+      else
+      {
+        scale(y, 0.05, 0.0, y_max_v_dn);
+      }
+      scale(z, 0.05, 0.0, z_max_v_dn);
+    }
+    else
+    {
+      scale(y, 0.05, 0.0, y_max_v_up);
+      scale(z, 0.05, 0.0, z_max_v_up);
+    }
+    #endif
+    if(m_lift_sp < 1.20 * lift_low){
+      scale(y, 0.05, 0.0, 0.3);
+      scale(z, 0.05, 0.0, 0.25);
+    } else {
+    scale(y, 0.05, 0.0, 0.15);
+    scale(z, 0.05, 0.0, 0.125);
+    }
+    output.y = y;
+    output.z = z;
+
+    double lift_speed = 0;
+    double fw_speed = 0;
+    double intake_speed = 0;
+
+    //flywheel control
+    if (m_stick_d.GetRawAxis(3) > 0.5)
+    {
+      fw_speed = 0.35; //default is m_fw_sp2
+    }
+    output.flywheel = fw_speed;
+
+    // intake control
+    if (m_stick_d.GetRawButton(5))
+    {
+      intake_speed = 0.8;
+    }
+    else if (m_stick_d.GetRawAxis(2) > 0.5)
+    {
+      intake_speed = -0.3;
+    } 
+    else {
+      m_intake_2.Set(0);
+    }
+    output.intake = intake_speed;
+
+    // lift control
+    int lift_position = m_lift_position.GetValue();   
+
+    if (!m_stick_d.GetRawButton(key_alt))
+    {
+      if (m_stick_d.GetRawButtonPressed(key_extend))
+      {
+        m_lift_sp = 1600; //1340 is standard
+      }
+      else if (m_stick_d.GetRawButtonPressed(key_retract))
+      {
+        m_lift_sp = 400; //400 is standard
+      }
+
+      lift_speed = m_lift_pid.Calculate(lift_position, m_lift_sp);
+    }
+    else
+    {
+      // manual control - no limits in case of pot failure!
+      if (m_stick_d.GetRawButton(key_extend))
+      {
+        m_lift_sp = lift_position;
+
+        // if (lift_position < m_lift_sp) lift_speed = 0.4;
+        lift_speed = 0.4; 
+      }
+      else if (m_stick_d.GetRawButton(key_retract))
+      {
+        m_lift_sp = lift_position;
+
+        // if (lift_position > m_lift_sp) lift_speed = -0.4;
+        lift_speed = -0.4; 
+      }
+    }
+    clamp(lift_speed, 0.7, -0.7);
+    // scale(lift_speed, 0.1, 0.3, 0.7);
+    // printf("sp=%d pos=%d lift speed = %5.2f\n", m_lift_sp, lift_position, lift_speed);
+    output.lift = lift_speed;
+
+    if(m_stick_d.GetRawButton(6)) {
+      START_MOVE(mv_shoot_low_game);
+    }
+
+    evaluate_step(output);
+
+    update_outputs(output);
+}
 }
 
 void Robot::DisabledInit() 
@@ -608,7 +839,6 @@ void Robot::TestPeriodic() {}
 
 void Robot::SimulationInit() {}
 void Robot::SimulationPeriodic() {}
-
 
 void Robot::set_camera_selection()
 {
@@ -644,8 +874,18 @@ void Robot::start_move(move_step_t *steps, int count)
 
 void Robot::evaluate_step(output_t &output)
 {
-  if (!move_active) return;   // use output defaults
+  // TODO: this could be cleaner
+  if (fabs(output.y) > .1 || fabs(output.z > .1))
+  {
+    move_active = false;
 
+    // cancel drive/heading
+    m_drive_active = false;
+    m_heading_active = false;
+  }
+
+  if (!move_active) return;   // use output defaults
+  
   double t = m_timer.Get().value();
   double elapsed = t - m_step_start;
 
@@ -673,7 +913,7 @@ void Robot::evaluate_step(output_t &output)
     bool distance_complete = (m_step.distance == 0);
     if (!distance_complete)
     {
-      y = drive_distance(m_step.distance);
+      y = drive_distance(m_step.distance, m_step.y > 0.0);
       z = drive_heading(0);
       distance_complete = (fabs(y) < 0.001 && fabs(z) < 0.001);
     }
@@ -695,7 +935,16 @@ void Robot::evaluate_step(output_t &output)
   output.y = y;
   output.z = z;
   output.intake = m_step.intake;
-  if (m_step.flywheel) output.flywheel = (m_step.flywheel == 1) ? m_fw_sp1 : m_fw_sp2;
+
+  // flywheel select speeds from the dashboard
+  switch (m_step.flywheel)
+  {
+    case 0: output.flywheel = 0.0; break;
+    case 1: output.flywheel = m_fw_sp1; break;
+    case 2: output.flywheel = m_fw_sp2; break;
+    case 3: output.flywheel = m_fw_sp3; break;
+    default: output.flywheel = 0.0; break;
+  }
 
   if (m_step.pixy)
   {
@@ -738,7 +987,7 @@ double Robot::drive_distance(double d, bool absolute)
     if (!m_drive_active)
     {
       l_sp = absolute ? d : d + l_position;
-      // printf("d=%5.2f lp=%5.2f sp=%5.2f\n", d, l_position, l_sp);
+      printf("d=%5.2f lp=%5.2f sp=%5.2f\n", d, l_position, l_sp);
       // r_sp = absolute ? d : d + r_position;
       // printf("d=%5.2f rp=%5.2f sp=%5.2f\n", d, r_position, r_sp);
       m_drive_active = true;
@@ -866,8 +1115,6 @@ void Robot::drive(double y, double z, bool limit_accel)
     double dy = y - last_y;
     double dz = z - last_z;
 
-    printf("1: y=%5.2f/%5.2f z=%5.2f/%5.2f\n", y, dy, z, dz);
-
     if (limit_accel)
     {
       clamp(dy, accel_y_max, -accel_y_max);
@@ -880,10 +1127,9 @@ void Robot::drive(double y, double z, bool limit_accel)
     if (tmp_y != last_y || tmp_z != last_z)
     {
       // printf("y: %5.2f => %5.2f / x: %5.2f => %5.2f\n", y, last_y, z, last_z);
-
-      printf("2: y=%5.2f/%5.2f z=%5.2f/%5.2f\n", last_y, dy, last_z, dz);
     }
 
+    // positive z is counterclockwise
     m_robotDrive.ArcadeDrive(-last_y, last_z, false);
 }
   

@@ -19,13 +19,33 @@
 
 #include <cameraserver/CameraServer.h>
 
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/core.hpp>
+
 #include "rev/CANSparkMax.h"
 #include "ctre/Phoenix.h"
 #include "pigeon_gyro.h"
 
+// branch designation "x" = experimental
+#define BRANCH "x"
+
+#define SIZEOF_ARRAY(array_name) (sizeof(array_name) / sizeof(array_name[0]))
+
+#define START_MOVE(mv) start_move(mv, SIZEOF_ARRAY(mv))
+
+#define AUTON(mv)  mv, (sizeof(mv) / sizeof(mv[0]))
+
+// #define VELOCITY_CONTROL
+ 
+// default PID coefficients
+double kP = 6e-5, kI = 1e-6, kD = 0, kIz = 0, kFF = 0.000015, kMaxOutput = 1.0, kMinOutput = -1.0;
+
+// motor max RPM
+const double MaxRPM = 5700;
+
 static const int leftLeadDeviceID = 1, leftFollowDeviceID = 2, rightLeadDeviceID = 3, rightFollowDeviceID = 4;
 
-typedef struct
+struct move_step_t
 {
     double y;
     double z;
@@ -35,13 +55,19 @@ typedef struct
     double distance;
     double heading;
     bool pixy;
-} move_step_t;
+};
 
-typedef struct
+struct move_seq_t
 {
     move_step_t *steps;
     size_t total_steps;
-} move_seq_t;
+};
+
+struct auto_tbl_t
+{
+  move_step_t *move;
+  size_t n;
+};
 
 struct output_t
 {
@@ -77,6 +103,8 @@ class Robot : public frc::TimedRobot
 
   void SimulationInit() override;
   void SimulationPeriodic() override;
+
+  // static void VisionThread();  
 
   void set_camera_selection();
 
@@ -140,13 +168,13 @@ class Robot : public frc::TimedRobot
 
     double m_fw_sp1;
     double m_fw_sp2;
+    double m_fw_sp3;
+
+    bool turbo;
+
     int m_lift_sp {0};
 
-    double m_measure;
-
     double m_direction {-1};
-    double accel_y_max {0.025};
-    double accel_z_max {0.02};
 
     size_t step_n;
     double m_step_start;
