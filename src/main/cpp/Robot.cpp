@@ -10,7 +10,7 @@
   mv[0].t = delay;    \
   start_move(mv, SIZEOF_ARRAY(mv))
 
-static const char *version = "Rapid React v5.9.2";
+static const char *version = "Rapid React v5.9.3";
 
 static const int key_alt = 6;     // RB
 static const int key_retract = 1; // A
@@ -866,8 +866,6 @@ void Robot::drive(double y, double z, bool limit_accel)
     double dy = y - last_y;
     double dz = z - last_z;
 
-    printf("1: y=%5.2f/%5.2f z=%5.2f/%5.2f\n", y, dy, z, dz);
-
     if (limit_accel)
     {
       clamp(dy, accel_y_max, -accel_y_max);
@@ -880,8 +878,6 @@ void Robot::drive(double y, double z, bool limit_accel)
     if (tmp_y != last_y || tmp_z != last_z)
     {
       // printf("y: %5.2f => %5.2f / x: %5.2f => %5.2f\n", y, last_y, z, last_z);
-
-      printf("2: y=%5.2f/%5.2f z=%5.2f/%5.2f\n", last_y, dy, last_z, dz);
     }
 
     m_robotDrive.ArcadeDrive(-last_y, last_z, false);
