@@ -13,6 +13,7 @@
 #include <frc/I2C.h>
 #include <frc/DriverStation.h>
 #include <frc/smartdashboard/SmartDashboard.h>
+#include <frc/controller/PIDController.h>
 
 #include <networktables/NetworkTableInstance.h>
 #include <networktables/NetworkTable.h>
@@ -185,4 +186,6 @@ class Robot : public frc::TimedRobot
 
     bool m_drive_active = false;
     bool m_heading_active = false;
+
+    frc::PIDController m_PixyPID{0.5, 0, 0};
 };

@@ -21,7 +21,7 @@ static double accel_y_max = 0.025;
 static double accel_z_max = 0.02;
 
 // lift setpoints
-static double lift_high = 1340;
+static double lift_high = 1420;
 static double lift_low = 400;
 
 static const int key_alt = 6;     // RB
@@ -175,6 +175,21 @@ move_step_t mv_auto_5[] =
   {0.0, 0.0, 1.0, 0.7, 1, 0.0, 0.0, 0},
 };
 
+//Auto for DOD
+move_step_t mv_auto_6[] = {
+  //delay
+  {0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0},
+  //move back while intake runs
+  {-0.25, 0.0, 2.2, 0.7, 0, 0.0, 0.0, 0},
+  {0.3, 0.0, 3.0, 0.0, 0, 0.0, 0.0, 0},
+  {0.0, 0.0, 0.3, -0.2, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 2, 0.0, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 0.3, 0.7, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 1, 0.0, 1, 0.0, 0.0, 0},
+  {0.0, 0.0, 1, 0.7, 1, 0.0, 0.0, 0},
+
+};
+
 // auton selections - position determines numbering
 // - first entry is selection #1
 // - all auton moves must be defined above this line
@@ -185,6 +200,7 @@ struct auto_tbl_t auton_selections[] =
   {AUTON(mv_auto_3)},
   {AUTON(mv_auto_4)},
   {AUTON(mv_auto_5)},
+  {AUTON(mv_auto_6)},
 };
 
 // additional computer assisted operations
@@ -448,16 +464,16 @@ void Robot::RobotInit()
     set_camera_selection();
 
     frc::SmartDashboard::PutNumber("delay", 0);
-    frc::SmartDashboard::PutNumber("auto", 2);
+    frc::SmartDashboard::PutNumber("auto", 6);
 
     frc::SmartDashboard::PutNumber("fw_sp1", 0.56);
-    frc::SmartDashboard::PutNumber("fw_sp2", 0.4);
+    frc::SmartDashboard::PutNumber("fw_sp2", 0.56);
     frc::SmartDashboard::PutNumber("fw_sp3", 0.35);
 
     frc::SmartDashboard::PutNumber("P", 0.002);
     frc::SmartDashboard::PutNumber("I", 0.000001);
 
-    frc::SmartDashboard::PutBoolean("TURBO", false);
+    frc::SmartDashboard::PutBoolean("TURBO", true);
 
     m_alliance = frc::DriverStation::GetAlliance();
 
@@ -1076,10 +1092,17 @@ bool Robot::steer_pixy(double &z, int color)
   {
     // target found
     // printf("px=%d\n", px);
-    z = ((double)px / 60) * 0.25;
+    // z = ((double)px / 60) * 0.25;
 
+    // result = true;
+
+    // z = m_PixyPID.Calculate(z, ((px / 60) * 0.25));
+    // printf("px = %d , z = %d , pa = %d , color = %d\n", (((double)px / 60) * 0.25), z, pa, color);
+    z = m_PixyPID.Calculate(z, ((double)px / 60) * 0.25);
+    printf("z=%5.2f\n", z);
     result = true;
   }
+
 
   return result;
 }
